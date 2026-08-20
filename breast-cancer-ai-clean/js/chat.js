@@ -643,80 +643,124 @@ function speakAnswer(textToSpeak, buttonElement) {
 
 // Voice Recognition (Speech-to-Text) in Chat
 const chatVoiceMicButton = document.getElementById('chatVoiceMicButton');
-if (chatVoiceMicButton) {
+let chatRecognition = null;
+let isChatRecordingActive = false;
+let chatSilenceTimer = null;
+const originalChatPlaceholder = chatInput.placeholder;
+
+function startChatVoiceRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (SpeechRecognition) {
+  if (!SpeechRecognition) {
+    alert('Speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.');
+    return;
+  }
+
+  if (isChatRecordingActive) {
+    stopChatVoiceRecognition(true);
+    return;
+  }
+
+  try {
+    if (chatRecognition) {
+      try { chatRecognition.abort(); } catch (e) {}
+    }
+
     const recognition = new SpeechRecognition();
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    let isListening = false;
-    const originalPlaceholder = chatInput.placeholder;
-
-    chatVoiceMicButton.addEventListener('click', () => {
-      if (isListening) {
-        recognition.stop();
-      } else {
-        try {
-          recognition.start();
-        } catch (err) {
-          console.warn('Chat speech recognition start error:', err);
-        }
-      }
-    });
+    isChatRecordingActive = true;
+    if (chatVoiceMicButton) chatVoiceMicButton.classList.add('is-recording');
+    chatInput.placeholder = 'Listening... Speak your question now';
 
     recognition.onstart = () => {
-      isListening = true;
-      chatVoiceMicButton.classList.add('is-recording');
-      chatVoiceMicButton.setAttribute('title', 'Listening... Click to stop');
-      chatInput.placeholder = 'Listening... Speak your question now';
+      isChatRecordingActive = true;
+      if (chatVoiceMicButton) {
+        chatVoiceMicButton.classList.add('is-recording');
+        chatVoiceMicButton.setAttribute('title', 'Listening... Click to stop');
+      }
     };
 
     recognition.onresult = (event) => {
-      let transcript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
       }
-      if (transcript.trim()) {
-        chatInput.value = transcript;
+
+      const spokenText = (finalTranscript || interimTranscript).trim();
+      if (spokenText) {
+        chatInput.value = spokenText;
         chatInput.style.height = 'auto';
         chatInput.style.height = `${Math.min(chatInput.scrollHeight, 120)}px`;
+
+        clearTimeout(chatSilenceTimer);
+        chatSilenceTimer = setTimeout(() => {
+          stopChatVoiceRecognition(true);
+        }, 1600);
       }
     };
 
     recognition.onerror = (event) => {
-      console.warn('Chat speech recognition error:', event.error);
-      stopListening();
+      console.warn('Chat speech recognition error event:', event.error);
       if (event.error === 'not-allowed') {
-        alert('Microphone access was blocked. Please enable microphone permission in your browser to use voice input.');
+        alert('Microphone access was blocked. Please allow microphone permissions in your browser.');
       }
+      stopChatVoiceRecognition(false);
     };
 
     recognition.onend = () => {
-      stopListening();
-      const question = chatInput.value.trim();
-      if (question) {
-        window._lastQuestionWasVoice = true;
-        setTimeout(() => {
-          sendMessage();
-        }, 350);
-      } else {
-        chatInput.focus();
+      if (isChatRecordingActive) {
+        stopChatVoiceRecognition(true);
       }
     };
 
-    function stopListening() {
-      isListening = false;
-      chatVoiceMicButton.classList.remove('is-recording');
-      chatVoiceMicButton.setAttribute('title', 'Click to speak');
-      chatInput.placeholder = originalPlaceholder;
-    }
-  } else {
-    chatVoiceMicButton.addEventListener('click', () => {
-      alert('Speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.');
-    });
+    chatRecognition = recognition;
+    recognition.start();
+  } catch (err) {
+    console.error('Failed to start chat speech recognition:', err);
+    stopChatVoiceRecognition(false);
   }
+}
+
+function stopChatVoiceRecognition(shouldSubmit = true) {
+  isChatRecordingActive = false;
+  clearTimeout(chatSilenceTimer);
+
+  if (chatRecognition) {
+    try { chatRecognition.stop(); } catch (e) {}
+    chatRecognition = null;
+  }
+
+  if (chatVoiceMicButton) {
+    chatVoiceMicButton.classList.remove('is-recording');
+    chatVoiceMicButton.setAttribute('title', 'Click to speak');
+  }
+  chatInput.placeholder = originalChatPlaceholder;
+
+  const question = chatInput.value.trim();
+  if (shouldSubmit && question) {
+    window._lastQuestionWasVoice = true;
+    setTimeout(() => {
+      sendMessage();
+    }, 380);
+  } else {
+    chatInput.focus();
+  }
+}
+
+if (chatVoiceMicButton) {
+  chatVoiceMicButton.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    startChatVoiceRecognition();
+  });
 }
 
 // Initialize Page
