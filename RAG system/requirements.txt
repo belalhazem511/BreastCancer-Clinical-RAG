@@ -1,6 +1,4 @@
-streamlit
-openai
-python-dotenv
+﻿python-dotenv
 numpy
-sentence-transformers
+fastembed>=0.3.0
 rank-bm25

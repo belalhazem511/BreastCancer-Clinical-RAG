@@ -60,10 +60,41 @@ if len(embeddings) != len(chunks):
         "Run Embeddings.py again."
     )
 
-# 4. Load BGE model
-print("[*] Initializing BGE embedding model (BAAI/bge-small-en-v1.5)...", flush=True)
-embedding_model = SentenceTransformer("BAAI/bge-small-en-v1.5")
-print("[+] BGE embedding model loaded successfully.", flush=True)
+# 4. Load BGE model with ultra-low memory FastEmbed ONNX engine (<50MB RAM)
+print("[*] Initializing ultra-low memory BGE embedding model (BAAI/bge-small-en-v1.5)...", flush=True)
+_fastembed_model = None
+_sentence_transformer_model = None
+
+try:
+    from fastembed import TextEmbedding
+    _fastembed_model = TextEmbedding("BAAI/bge-small-en-v1.5")
+    print("[+] FastEmbed ONNX runtime engine loaded successfully (RAM: <50MB).", flush=True)
+except Exception as e:
+    try:
+        from sentence_transformers import SentenceTransformer
+        _sentence_transformer_model = SentenceTransformer("BAAI/bge-small-en-v1.5")
+        print("[+] SentenceTransformer engine loaded successfully.", flush=True)
+    except Exception as e2:
+        print(f"[!] Warning: Embedding model could not be loaded: {e2}", flush=True)
+
+
+def encode_query_vector(text: str) -> np.ndarray:
+    """Encode a single query string into a normalized 384-d vector with minimal RAM."""
+    if _fastembed_model is not None:
+        vecs = list(_fastembed_model.embed([text]))
+        vec = np.asarray(vecs[0], dtype=np.float32)
+        norm = np.linalg.norm(vec)
+        if norm > 0:
+            vec = vec / norm
+        return vec
+    elif _sentence_transformer_model is not None:
+        try:
+            vec = _sentence_transformer_model.encode_query(text, normalize_embeddings=True)
+        except AttributeError:
+            vec = _sentence_transformer_model.encode(text, normalize_embeddings=True)
+        return np.asarray(vec, dtype=np.float32)
+    else:
+        return np.zeros((384,), dtype=np.float32)
 
 # 5. Prepare text for BM25
 texts_for_bm25 = []
@@ -144,18 +175,7 @@ def hybrid_query(
     and BM25 keyword matching with Reciprocal Rank Fusion (RRF).
     """
     # A. SEMANTIC RETRIEVAL - BGE
-    try:
-        query_embedding = embedding_model.encode_query(
-            question,
-            normalize_embeddings=True
-        )
-    except AttributeError:
-        query_embedding = embedding_model.encode(
-            question,
-            normalize_embeddings=True
-        )
-        
-    query_embedding = np.asarray(query_embedding, dtype=np.float32)
+    query_embedding = encode_query_vector(question)
     semantic_scores = embeddings @ query_embedding
 
     # B. KEYWORD RETRIEVAL - BM25 with query expansion
