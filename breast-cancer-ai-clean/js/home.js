@@ -69,6 +69,10 @@ if (homeVoiceMicButton) {
     let isListening = false;
     const originalPlaceholder = questionInput.placeholder;
 
+    const heroOrbWrap = document.getElementById('heroOrbWrap');
+    const assistantStatusBadge = document.getElementById('assistantStatusBadge');
+    const assistantStatusText = document.getElementById('assistantStatusText');
+
     homeVoiceMicButton.addEventListener('click', () => {
       if (isListening) {
         recognition.stop();
@@ -86,6 +90,12 @@ if (homeVoiceMicButton) {
       homeVoiceMicButton.classList.add('is-recording');
       homeVoiceMicButton.setAttribute('title', 'Listening... Click to stop');
       questionInput.placeholder = 'Listening... Speak your clinical question now';
+      
+      heroOrbWrap?.classList.add('is-listening');
+      heroOrbWrap?.classList.remove('is-processing');
+      assistantStatusBadge?.classList.add('is-listening');
+      assistantStatusBadge?.classList.remove('is-processing');
+      if (assistantStatusText) assistantStatusText.textContent = 'Listening to your voice...';
     };
 
     recognition.onresult = (event) => {
@@ -110,6 +120,11 @@ if (homeVoiceMicButton) {
       stopListening();
       const question = questionInput.value.trim();
       if (question) {
+        localStorage.setItem('bcai_voice_mode', '1');
+        heroOrbWrap?.classList.add('is-processing');
+        assistantStatusBadge?.classList.add('is-processing');
+        if (assistantStatusText) assistantStatusText.textContent = 'Analyzing NICE guidelines...';
+        
         setTimeout(() => {
           sendCurrentQuestion();
         }, 350);
@@ -123,6 +138,11 @@ if (homeVoiceMicButton) {
       homeVoiceMicButton.classList.remove('is-recording');
       homeVoiceMicButton.setAttribute('title', 'Click to speak');
       questionInput.placeholder = originalPlaceholder;
+      heroOrbWrap?.classList.remove('is-listening');
+      assistantStatusBadge?.classList.remove('is-listening');
+      if (!questionInput.value.trim() && assistantStatusText) {
+        assistantStatusText.textContent = 'AI assistant ready';
+      }
     }
   } else {
     homeVoiceMicButton.addEventListener('click', () => {

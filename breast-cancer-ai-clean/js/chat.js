@@ -133,8 +133,15 @@ function createAnswer(data) {
   group.innerHTML = `
     <article class="answer-card">
       <div class="answer-header">
-        <div class="mini-ai"></div>
-        <h2>Evidence-based answer</h2>
+        <div class="answer-title-group">
+          <div class="mini-ai"></div>
+          <h2>Evidence-based answer</h2>
+        </div>
+        <button class="voice-speak-btn" type="button" aria-label="Listen to voice answer" title="Listen to AI voice answer">
+          <svg class="speaker-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 5L6 9H2V15H6L11 19V5Z"></path><path d="M19.07 4.93C20.94 6.81 22 9.34 22 12C22 14.66 20.94 17.19 19.07 19.07"></path><path d="M15.54 8.46C16.47 9.4 17 10.66 17 12C17 13.34 16.47 14.6 15.54 15.54"></path></svg>
+          <span class="speak-btn-text">🔊 Listen</span>
+          <div class="sound-wave-bars" aria-hidden="true"><span></span><span></span><span></span></div>
+        </button>
       </div>
       
       <p><strong>${escapeHtml(summary)}</strong></p>
@@ -173,6 +180,23 @@ function createAnswer(data) {
   `;
 
   conversation.appendChild(group);
+
+  // Attach speak button listener
+  const speakBtn = group.querySelector('.voice-speak-btn');
+  const speechText = `${summary}. ${data.recommendations && data.recommendations.length ? 'Recommendations: ' + data.recommendations.slice(0, 3).join('. ') : ''}`;
+  if (speakBtn) {
+    speakBtn.addEventListener('click', () => {
+      speakAnswer(speechText, speakBtn);
+    });
+  }
+
+  // If question was submitted via voice, automatically speak the answer
+  if (window._lastQuestionWasVoice) {
+    window._lastQuestionWasVoice = false;
+    setTimeout(() => {
+      if (speakBtn) speakAnswer(speechText, speakBtn);
+    }, 550);
+  }
 
   // Attach event listeners to chips and buttons
   group.querySelectorAll('.evidence-trigger').forEach((button) => {
@@ -550,6 +574,73 @@ chatInput.addEventListener('input', () => {
 });
 drawerClose.addEventListener('click', closeEvidence);
 
+// Speech Synthesis (Text-to-Speech Voice Assistant)
+let activeSpeakingBtn = null;
+
+function stopSpeaking() {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+  if (activeSpeakingBtn) {
+    activeSpeakingBtn.classList.remove('is-speaking');
+    const label = activeSpeakingBtn.querySelector('.speak-btn-text');
+    if (label) label.textContent = '🔊 Listen';
+    activeSpeakingBtn = null;
+  }
+}
+
+function speakAnswer(textToSpeak, buttonElement) {
+  if (!('speechSynthesis' in window)) {
+    alert('Voice output is not supported in this browser.');
+    return;
+  }
+
+  if (activeSpeakingBtn === buttonElement && window.speechSynthesis.speaking) {
+    stopSpeaking();
+    return;
+  }
+
+  stopSpeaking();
+
+  const cleanText = textToSpeak
+    .replace(/[#*_`•]/g, ' ')
+    .replace(/NICE\s+NG101/gi, 'NICE N G 101')
+    .replace(/NICE\s+CG81/gi, 'NICE C G 81')
+    .replace(/NICE\s+CG164/gi, 'NICE C G 164')
+    .replace(/ER\+/gi, 'ER positive')
+    .replace(/HER2\+/gi, 'HER 2 positive')
+    .replace(/PR\+/gi, 'PR positive')
+    .replace(/Section\s+(\d+)\.(\d+)/gi, 'Section $1 point $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleanText) return;
+
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+  utterance.lang = 'en-US';
+  utterance.rate = 0.97;
+  utterance.pitch = 1.0;
+
+  const voices = window.speechSynthesis.getVoices() || [];
+  const preferredVoice = voices.find(v => (v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Jenny') || v.name.includes('Guy') || v.name.includes('Samantha') || v.name.includes('Zira')))) || voices.find(v => v.lang.startsWith('en'));
+  if (preferredVoice) utterance.voice = preferredVoice;
+
+  activeSpeakingBtn = buttonElement;
+  buttonElement.classList.add('is-speaking');
+  const label = buttonElement.querySelector('.speak-btn-text');
+  if (label) label.textContent = '⏹ Stop';
+
+  utterance.onend = () => {
+    stopSpeaking();
+  };
+
+  utterance.onerror = () => {
+    stopSpeaking();
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
 // Voice Recognition (Speech-to-Text) in Chat
 const chatVoiceMicButton = document.getElementById('chatVoiceMicButton');
 if (chatVoiceMicButton) {
@@ -606,6 +697,7 @@ if (chatVoiceMicButton) {
       stopListening();
       const question = chatInput.value.trim();
       if (question) {
+        window._lastQuestionWasVoice = true;
         setTimeout(() => {
           sendMessage();
         }, 350);
@@ -632,6 +724,10 @@ renderRecentChats();
 
 const initialQuestion = localStorage.getItem(STORAGE_QUESTION);
 const initialSource = localStorage.getItem(STORAGE_SOURCE) || '';
+if (localStorage.getItem('bcai_voice_mode') === '1') {
+  window._lastQuestionWasVoice = true;
+  localStorage.removeItem('bcai_voice_mode');
+}
 
 if (initialQuestion) {
   // Clear stored question so subsequent reloads don't re-trigger unnecessarily
