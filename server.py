@@ -177,9 +177,10 @@ Your knowledge base is strictly limited to three official NICE guidelines:
 
 CORE INSTRUCTIONS:
 1. Grounding & Evidence Extraction:
-   - Answer the user's question using the retrieved NICE guideline context provided below.
+   - Answer the user's question using ONLY the retrieved NICE guideline chunk excerpts provided in the prompt.
    - Synthesize evidence across all retrieved sections (NG101, CG81, CG164).
    - Preserve exact clinical details: drug names (e.g. anastrozole, letrozole, exemestane, tamoxifen, trastuzumab, pertuzumab, zoledronic acid), dosages, receptor status (ER, PR, HER2), disease stage, surgical margin criteria (e.g. 0 mm no ink on tumour for invasive cancer, 2 mm for DCIS), risk thresholds (e.g. >=10% carrier probability for BRCA1/BRCA2 genetic testing, 17-30% moderate vs >30% high lifetime risk), and surveillance intervals.
+   - Output NO internal reasoning, thoughts, or preamble. Start your answer DIRECTLY with 'Recommendations:'.
 
 2. Boundary, Negative & Restrictive Recommendations:
    - Clinical guidelines contain both positive recommendations ("Offer...") and explicit negative or restrictive recommendations ("Do not offer...", "Do not routinely use...", "Only offer if...").
@@ -317,46 +318,59 @@ def parse_llm_response(
     )
 
     # Extract Summary if explicitly provided
-    summary_match = re.search(
-        r"(?:\*\*)?Summary:?(?:\*\*)?\s*"
+    summary_matches = list(re.finditer(
+        r"(?:^|\n)\s*(?:#+\s*)?(?:\*\*)?Summary:?(?:\*\*)?\s*\n?"
         r"(.*?)"
         r"(?=\n\s*(?:#+\s*)?(?:\*\*)?"
         r"(?:Recommendations|Supporting Evidence|Confidence|Citation)|$)",
         text,
         re.DOTALL | re.IGNORECASE,
-    )
-    if summary_match:
-        summary = summary_match.group(1).strip()
+    ))
+    if summary_matches:
+        summary = summary_matches[-1].group(1).strip()
 
-    # Extract Recommendations
-    rec_match = re.search(
-        r"(?:#+\s*)?(?:\*\*)?Recommendations:?(?:\*\*)?\s*"
+    # Extract Recommendations (anchor to header line)
+    rec_matches = list(re.finditer(
+        r"(?:^|\n)\s*(?:#+\s*)?(?:\*\*)?Recommendations:?(?:\*\*)?\s*\n"
         r"(.*?)"
         r"(?=\n\s*(?:#+\s*)?(?:\*\*)?"
         r"(?:Supporting Evidence|Confidence|Citation|Summary)|$)",
         text,
         re.DOTALL | re.IGNORECASE,
-    )
-    if rec_match:
-        rec_block = rec_match.group(1).strip()
+    ))
+    if rec_matches:
+        rec_block = rec_matches[-1].group(1).strip()
         for line in rec_block.split("\n"):
             clean_line = re.sub(r"^[-*•\d\.\)\s]+", "", line).strip()
+            # Filter meta reasoning lines
+            lower_l = clean_line.lower()
+            if any(k in lower_l for k in [
+                "i need to", "looking at the", "let's structure", "let me structure",
+                "according to the required format", "thinking process", "analyze query",
+                "the user is asking", "user is asking", "from the provided nice"
+            ]):
+                continue
             if clean_line and len(clean_line) > 3:
                 recommendations.append(clean_line)
 
-    # Extract Supporting Evidence
-    evidence_match = re.search(
-        r"(?:#+\s*)?(?:\*\*)?Supporting Evidence:?(?:\*\*)?\s*"
+    # Extract Supporting Evidence (anchor to header line)
+    evidence_matches = list(re.finditer(
+        r"(?:^|\n)\s*(?:#+\s*)?(?:\*\*)?Supporting Evidence:?(?:\*\*)?\s*\n"
         r"(.*?)"
         r"(?=\n\s*(?:#+\s*)?(?:\*\*)?"
         r"(?:Confidence|Citation|Recommendations|Summary)|$)",
         text,
         re.DOTALL | re.IGNORECASE,
-    )
-    if evidence_match:
-        evidence_block = evidence_match.group(1).strip()
+    ))
+    if evidence_matches:
+        evidence_block = evidence_matches[-1].group(1).strip()
         for line in evidence_block.split("\n"):
             clean_line = re.sub(r"^[-*•\d\.\)\s]+", "", line).strip()
+            lower_l = clean_line.lower()
+            if any(k in lower_l for k in [
+                "i need to", "looking at the", "thinking process", "analyze query"
+            ]):
+                continue
             if clean_line and len(clean_line) > 3:
                 supporting_evidence.append(clean_line)
 
@@ -372,7 +386,7 @@ def parse_llm_response(
 
     # Extract explanation after confidence
     safety_match = re.search(
-        r"(?:#+\s*)?(?:\*\*)?Confidence and Safety:?(?:\*\*)?\s*"
+        r"(?:^|\n)\s*(?:#+\s*)?(?:\*\*)?Confidence and Safety:?(?:\*\*)?\s*\n?"
         r"(.*?)(?=\n\s*(?:#+\s*)?(?:Recommendations|Supporting Evidence|Citation)|$)",
         text,
         re.DOTALL | re.IGNORECASE,
