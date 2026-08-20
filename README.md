@@ -28,7 +28,7 @@ short_description: Grounded NICE Guideline Clinical Decision Support with Groq L
 
 <br />
 
-[✨ Key Innovations](#-key-innovations) • [🏗️ System Architecture](#️-system-architecture) • [🎙️ Voice & Interactive Ball](#️-voice-assistant--interactive-glowing-orb) • [📊 Comparison Matrix](#-comparison-matrix) • [🚀 Quickstart](#-quickstart-guide) • [📡 API Reference](#-api-reference) • [☁️ Free Cloud Deployment](#️-cloud-deployment--100-free-hosting) • [🧪 Verification Suite](#-automated-verification-suite)
+[✨ Key Innovations](#-key-innovations) • [🏗️ System Architecture](#️-system-architecture) • [🎙️ Voice & Interactive Ball](#️-voice-assistant--interactive-glowing-orb) • [🚀 Quickstart](#-quickstart-guide) • [📡 API Reference](#-api-reference) • [☁️ Free Cloud Deployment](#️-cloud-deployment--100-free-hosting) • [🧪 Verification Suite](#-automated-verification-suite)
 
 </div>
 
@@ -120,20 +120,6 @@ BreastCancer.ai includes a state-of-the-art multimodal clinical interface design
     • Real-time speech-to-text transcription      • Clear, natural medical pronunciation
     • Smart 1.6s silence auto-submission          • Interactive 🔊 Listen / ⏹ Stop badge
 ```
-
----
-
-## 📊 Comparison Matrix
-
-| Evaluation Criteria | Generic LLM Chatbots | Standard RAG Pipelines | 🩺 BreastCancer.ai Platform |
-| :--- | :---: | :---: | :---: |
-| **Clinical Grounding** | ❌ Hallucination-prone | ⚠️ Approximate chunks | ✅ **Strict NICE Guidelines Only** |
-| **Exact PDF Page Deep-Links** | ❌ None | ⚠️ Document-level only | ✅ **Exact Chapter, Section & Page** |
-| **Out-of-Domain Guardrails** | ❌ None | ⚠️ Weak prompt-based | ✅ **Deterministic Scoring Threshold** |
-| **RAM Consumption** | ❌ > 2 GB | ❌ ~ 550 MB (PyTorch) | ✅ **< 50 MB (FastEmbed ONNX)** |
-| **Inference Speed** | ⚠️ 3–8 seconds | ⚠️ 2–5 seconds | ✅ **< 0.8 seconds (Groq LPU)** |
-| **Multimodal Voice AI** | ❌ Text only | ❌ Text only | ✅ **Two-Way Voice Dictation & Audio** |
-| **100% Free Cloud Hosting** | ❌ Requires paid GPU | ❌ Exceeds 512MB RAM | ✅ **Runs on Free 512MB Cloud Tiers** |
 
 ---
 
