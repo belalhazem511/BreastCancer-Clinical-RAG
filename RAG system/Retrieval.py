@@ -61,7 +61,9 @@ if len(embeddings) != len(chunks):
     )
 
 # 4. Load BGE model
+print("[*] Initializing BGE embedding model (BAAI/bge-small-en-v1.5)...", flush=True)
 embedding_model = SentenceTransformer("BAAI/bge-small-en-v1.5")
+print("[+] BGE embedding model loaded successfully.", flush=True)
 
 # 5. Prepare text for BM25
 texts_for_bm25 = []
