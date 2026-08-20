@@ -60,10 +60,11 @@ groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 # Prioritized list of supported Groq models for high availability and automatic failover
 GROQ_MODELS = [
-    "qwen/qwen3.6-27b",
-    "openai/gpt-oss-20b",
-    "openai/gpt-oss-120b",
+    "groq/compound",
     "groq/compound-mini",
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.6-27b",
     "allam-2-7b",
 ]
 
