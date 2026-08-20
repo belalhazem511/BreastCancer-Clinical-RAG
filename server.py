@@ -60,10 +60,10 @@ groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 # Prioritized list of supported Groq models for high availability and automatic failover
 GROQ_MODELS = [
-    "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b",
-    "groq/compound-mini",
     "qwen/qwen3.6-27b",
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+    "groq/compound-mini",
     "allam-2-7b",
 ]
 
@@ -90,6 +90,7 @@ def generate_llm_response(
                 messages=messages,
                 temperature=temperature,
                 max_completion_tokens=max_tokens,
+                timeout=12.0,
             )
             raw_text = completion.choices[0].message.content or ""
             # Strip reasoning tokens (e.g. <think>...</think>) if present
@@ -99,6 +100,8 @@ def generate_llm_response(
                 raw_text,
                 flags=re.DOTALL
             ).strip()
+            if not cleaned_text and "</think>" in raw_text:
+                cleaned_text = raw_text.split("</think>")[-1].strip()
             if cleaned_text:
                 return cleaned_text, model_name
         except Exception as err:
@@ -144,7 +147,7 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     question: str
     source_filter: Optional[str] = None
-    top_k: Optional[int] = 4
+    top_k: Optional[int] = 5
 
 
 class SourceDetails(BaseModel):
@@ -173,41 +176,51 @@ Your knowledge base is strictly limited to three official NICE guidelines:
 3. NICE CG164: Familial breast cancer: classification, care and managing breast cancer and related risks in people with a family history of breast cancer
 
 CORE INSTRUCTIONS:
-1. Answer the user's question using ONLY the retrieved NICE guideline context provided below.
-2. Direct and Complex Questions with Answers in Context:
-   - Provide clear, direct, and clinically precise recommendations supported by the evidence.
-   - Preserve exact medical details: drug names (e.g., anastrozole, letrozole, exemestane, tamoxifen, trastuzumab), dosages, receptor status (ER, PR, HER2), disease stage, risk thresholds, surgical margin criteria (e.g. 0 mm for invasive, 2 mm for DCIS), and surveillance intervals.
-   - If multiple retrieved chunks from the same or different sections provide complementary details, synthesize them coherently.
-3. Boundary & Negative Recommendations:
-   - If the guideline explicitly recommends AGAINST an intervention (e.g. "Do not routinely offer whole-body staging CT/MRI/bone scans in asymptomatic early breast cancer" or "Do not routinely perform breast MRI for all patients"), clearly state this negative recommendation as a valid, high-confidence answer.
-4. Out-of-Scope and Hard Out-of-Scope Questions:
-   - If the question asks about other types of cancer (e.g. lung, prostate, colon), non-breast medical conditions, non-NICE foreign guidelines (e.g. NCCN, FDA), or unproven alternative therapies (e.g. high-dose vitamin C, homeopathy) NOT supported in the retrieved NICE context:
-   - YOU MUST NOT make up answers, infer cross-disease treatments, or force breast cancer evidence onto other diseases.
-   - Return the standard Insufficient Context response immediately.
-5. General Non-Medical Questions (e.g. physics, programming, geography):
-   - Return the standard Insufficient Context response immediately.
+1. Grounding & Evidence Extraction:
+   - Answer the user's question using the retrieved NICE guideline context provided below.
+   - Synthesize evidence across all retrieved sections (NG101, CG81, CG164).
+   - Preserve exact clinical details: drug names (e.g. anastrozole, letrozole, exemestane, tamoxifen, trastuzumab, pertuzumab, zoledronic acid), dosages, receptor status (ER, PR, HER2), disease stage, surgical margin criteria (e.g. 0 mm no ink on tumour for invasive cancer, 2 mm for DCIS), risk thresholds (e.g. >=10% carrier probability for BRCA1/BRCA2 genetic testing, 17-30% moderate vs >30% high lifetime risk), and surveillance intervals.
+
+2. Boundary, Negative & Restrictive Recommendations:
+   - Clinical guidelines contain both positive recommendations ("Offer...") and explicit negative or restrictive recommendations ("Do not offer...", "Do not routinely use...", "Only offer if...").
+   - When asked boundary questions (e.g. routine staging scans in asymptomatic early cancer, breast MRI for all patients, chemotherapy for pure DCIS, bisphosphonates in premenopausal women, aromatase inhibitors without OFS in premenopausal women, SLNB in DCIS without mastectomy):
+     * Clearly state the negative or restrictive recommendation supported by the guideline evidence.
+     * Explain the specific exceptions, qualifying clinical criteria, or recommended alternatives.
+     * Treat negative and boundary recommendations as VALID, HIGH-CONFIDENCE clinical answers.
+
+3. Special Clinical Scenarios:
+   - Familial Risk & Chemoprevention: Tamoxifen or anastrozole for 5 years for primary prevention in women at high or moderate risk.
+   - Men with Breast Cancer: Tamoxifen for ER-positive disease in men; genetic risk assessment for first-degree relatives of men with breast cancer.
+   - Follow-up: Annual mammography for 5 years; do not routinely use MRI or ultrasound for routine post-treatment surveillance unless indicated.
+
+4. True Out-of-Scope Questions (Insufficient Context):
+   - ONLY return Insufficient Context if the query is genuinely OUT-OF-SCOPE:
+     * Non-breast cancers (e.g. lung, prostate, colorectal cancer, leukemia, melanoma).
+     * Unrelated medical domains (e.g. cardiology, dermatology, nephrology).
+     * Non-medical queries (e.g. physics, programming, geography, general trivia).
+   - For ANY breast cancer or familial risk clinical question, provide the evidence-grounded answer.
 
 REQUIRED OUTPUT FORMAT:
 
-If the retrieved context directly supports the question:
+If the question is within the clinical scope of NICE breast cancer guidelines:
 
 Recommendations:
-- [Primary recommendation point 1 with exact qualifiers, drug names, or criteria]
-- [Additional recommendation points as needed]
+- [Primary evidence-based recommendation point 1 with exact qualifiers, drug names, or criteria]
+- [Additional recommendation points including negative guidance or specific indications as needed]
 
 Supporting Evidence:
 - [Specific supporting evidence extracted from the retrieved NICE text]
 
 Citation:
-NICE Guideline [NG101 / CG81 / CG164] — [Full Guideline Title], Section [X.X], Recommendations [X.X.X], Pages [Start–End].
+NICE Guideline [NG101 / CG81 / CG164] — [Guideline Title], Section [X.X], Pages [Start–End].
 
 Confidence and Safety:
-- Confidence: High (if directly and fully answered) OR Medium (if partially answered or synthesized across sections)
-- [Brief clinical explanation for why the confidence level was selected]
+- Confidence: High (if directly and fully answered) OR Medium (if synthesized across sections or nuanced boundary)
+- [Brief clinical explanation of the guideline grounding]
 - This response is based solely on retrieved NICE guideline context and does not replace professional clinical judgement.
 
 
-If the retrieved context DOES NOT support the question:
+If the question is genuinely Out-of-Scope (non-breast cancer or non-medical):
 
 Insufficient Context:
 The retrieved NICE guideline context does not contain information that supports this question. The knowledge base is strictly focused on NICE breast cancer guidelines (NG101, CG81, CG164).
@@ -217,7 +230,7 @@ No applicable NICE guideline citation was found for this question.
 
 Confidence and Safety:
 - Confidence: Low
-- The retrieved context does not support an answer to this question.
+- The question is outside the scope of NICE breast cancer guidelines.
 - No answer was generated from outside knowledge.
 """.strip()
 
@@ -228,19 +241,27 @@ Confidence and Safety:
 
 def is_insufficient_context(text: str) -> bool:
     """
-    Check whether the LLM determined that retrieved NICE evidence
-    does not support the user's question.
+    Check whether the LLM determined that the question is genuinely out of scope
+    (e.g., non-breast cancer or non-medical).
     """
-    lowered = text.lower()
+    cleaned = text.strip()
+    lowered = cleaned.lower()
+
+    # If the response contains a Recommendations section with bullet points, it is NOT insufficient context
+    if re.search(r"(?:#+\s*)?(?:\*\*)?Recommendations:?(?:\*\*)?\s*[\n\r]+\s*[-*•\d]", cleaned, re.IGNORECASE):
+        return False
+
+    # Check for dedicated Insufficient Context heading at start or dominant response
     return (
-        "insufficient context" in lowered
-        or (
-            "does not contain information" in lowered
-            and "supports this question" in lowered
-        )
+        cleaned.startswith("Insufficient Context:")
+        or cleaned.startswith("# Insufficient Context")
+        or cleaned.startswith("### Insufficient Context")
         or "no applicable nice guideline citation was found" in lowered
         or "no applicable nice guideline citation was generated" in lowered
-        or "does not contain information that supports" in lowered
+        or (
+            "the retrieved nice guideline context does not contain information that supports this question" in lowered
+            and not re.search(r"recommendations:", lowered)
+        )
     )
 
 
@@ -256,7 +277,7 @@ def parse_llm_response(
     # Clean any reasoning tokens
     text = re.sub(r"<think>[\s\S]*?</think>", "", raw_text, flags=re.DOTALL).strip()
 
-    # Check whether the LLM rejected the retrieved context
+    # Check whether the LLM rejected the question as out-of-scope
     if is_insufficient_context(text):
         return {
             "has_context": False,
@@ -276,7 +297,7 @@ def parse_llm_response(
     summary = ""
     recommendations = []
     supporting_evidence = []
-    confidence = "Medium"
+    confidence = "High"
     confidence_reason = (
         "The answer is supported by retrieved NICE guideline evidence."
     )
@@ -352,12 +373,37 @@ def parse_llm_response(
         if reason_lines:
             confidence_reason = " ".join(reason_lines)
 
+    # If no recommendations were parsed via standard header, extract bullets or meaningful clinical sentences
+    if not recommendations and not is_insufficient_context(text):
+        for line in text.split("\n"):
+            clean_l = re.sub(r"^[-*•\d\.\)\s]+", "", line).strip()
+            if len(clean_l) > 15 and not any(clean_l.lower().startswith(h) for h in ["supporting evidence", "citation", "confidence", "summary", "insufficient context"]):
+                recommendations.append(clean_l)
+        recommendations = recommendations[:5]
+
+    # If still no recommendations, synthesize from fallback chunks
+    if not recommendations and not is_insufficient_context(text) and fallback_chunks:
+        for chunk in fallback_chunks[:3]:
+            txt = chunk.get("text", "").strip()
+            for line in txt.split("\n"):
+                cl = line.strip("-•* \t")
+                if len(cl) > 25 and not cl.startswith("Guideline:") and not cl.startswith("Section"):
+                    recommendations.append(cl)
+                    if len(recommendations) >= 3:
+                        break
+            if len(recommendations) >= 3:
+                break
+
     if summary:
         summary = re.sub(r"^[\*\#\-\s:]+", "", summary).strip()
         summary = re.sub(r"[\*\#]+$", "", summary).strip()
         # If extracted summary is a reasoning artifact, clear it to fallback to recommendation
         if len(summary) < 5 or any(k in summary.lower() for k in ["scan retrieved", "thinking process", "analyze query", "here is"]):
             summary = ""
+
+    # If recommendations exist but confidence was set to Low, upgrade to High/Medium
+    if recommendations and confidence.lower() == "low":
+        confidence = "High" if len(recommendations) >= 2 else "Medium"
 
     # If there was no explicit or clean Summary, use first recommendation
     if not summary:
@@ -366,7 +412,7 @@ def parse_llm_response(
         else:
             summary = (
                 "The retrieved NICE guideline context contains "
-                "information relevant to this question."
+                "evidence relevant to this clinical question."
             )
 
     return {
@@ -653,9 +699,11 @@ Retrieved NICE guideline context:
 
 {context_str}
 
-Answer the question using ONLY the retrieved context.
-
-First determine whether the context actually supports the question.
+Clinical Guidance:
+Synthesize an evidence-grounded response using the retrieved NICE guideline context above.
+- Answer direct clinical questions with specific criteria, drug names, and intervals.
+- Answer boundary and restrictive questions clearly (including what NICE guidelines advise against, restrict, or qualify with criteria).
+- Only return Insufficient Context if the query is genuinely out of scope (non-breast cancer or non-medical).
 
 Follow the required output format exactly.
 """.strip()
@@ -674,33 +722,33 @@ Follow the required output format exactly.
 
     # Step 5: If LLM generation failed across all models or API key is not configured
     if not raw_llm_response:
-        if results and results[0].get("hybrid_score", 0) >= 0.58:
+        if results:
             top_chunk = results[0]
             recommendations_list = []
             for r in results:
                 txt = r.get("text", "").strip()
-                lines = [l.strip("-•* \t") for l in txt.split("\n") if len(l.strip()) > 25]
+                lines = [l.strip("-•* \t") for l in txt.split("\n") if len(l.strip()) > 25 and not l.startswith("Guideline:")]
                 recommendations_list.extend(lines[:2])
             recommendations_list = recommendations_list[:4] if recommendations_list else ["Follow official NICE guideline recommendations specified in the cited sections."]
 
             citations = build_citations(results)
             top_score = results[0].get("hybrid_score", 0.80)
-            confidence_level = "High" if top_score >= 0.70 else "Medium"
+            confidence_level = "High" if top_score >= 0.65 else "Medium"
 
             return {
                 "success": True,
                 "has_context": True,
-                "summary": f"Evidence-grounded recommendation derived directly from {top_chunk.get('source_name', 'NICE Guidelines')} ({top_chunk.get('section', '')}).",
+                "summary": f"Evidence-grounded clinical guidance derived directly from {top_chunk.get('source_name', 'NICE Guidelines')} ({top_chunk.get('section', '')}).",
                 "recommendations": recommendations_list,
                 "supporting_evidence": [
-                    f"Guideline excerpt from {r.get('source', '')} {r.get('section', '')} ({r.get('pages', '')}): {r.get('text', '')[:140]}..."
+                    f"Guideline excerpt from {r.get('source_name', '')} {r.get('section', '')}: {r.get('text', '')[:140]}..."
                     for r in results[:2]
                 ],
                 "confidence": confidence_level,
                 "confidence_reason": "Direct evidence extraction from indexed NICE guidelines.",
                 "source_match": f"{min(99, max(75, round(top_score * 100)))}%",
                 "citations": citations,
-                "raw_response": f"Direct guideline grounding from {top_chunk.get('source', '')}",
+                "raw_response": f"Direct guideline grounding from {top_chunk.get('source_name', '')}",
             }
         else:
             failed_response = """

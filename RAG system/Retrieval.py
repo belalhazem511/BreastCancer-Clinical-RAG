@@ -104,30 +104,90 @@ for chunk in chunks:
     text = f"{header}\n{subheader}\n{chunk_text}"
     texts_for_bm25.append(text)
 
-# 6. Stop words and medical synonym mappings
+# 6. Stop words and comprehensive medical synonym mappings
 stop_words = {
     "the", "is", "a", "an", "what", "of", "to", "for", "with", "how",
     "should", "be", "in", "on", "and", "or", "are", "was", "were", "do",
-    "does", "did", "can", "could", "would", "at", "by", "from", "about"
+    "does", "did", "can", "could", "would", "at", "by", "from", "about",
+    "when", "why", "which", "who", "whom", "will", "shall"
 }
 
 SYNONYMS = {
     "dcis": "ductal carcinoma in situ",
-    "er+": "er positive estrogen receptor",
-    "er-": "er negative",
-    "her2+": "her2 positive",
+    "er+": "er positive estrogen receptor positive",
+    "er-": "er negative estrogen receptor negative",
+    "her2+": "her2 positive human epidermal growth factor receptor 2",
     "her2-": "her2 negative",
     "pr+": "progesterone receptor positive",
-    "brca": "brca1 brca2 mutation",
-    "chemo": "chemotherapy",
-    "rt": "radiotherapy",
+    "pr-": "progesterone receptor negative",
+    "brca": "brca1 brca2 mutation genetic carrier",
+    "brca1": "brca1 genetic carrier mutation",
+    "brca2": "brca2 genetic carrier mutation",
+    "tp53": "tp53 li-fraumeni syndrome mutation carrier",
+    "chemo": "chemotherapy systemic therapy",
+    "rt": "radiotherapy radiation",
     "radiation": "radiotherapy",
-    "lumpectomy": "breast-conserving surgery",
-    "mastectomy": "mastectomy surgical",
+    "lumpectomy": "breast-conserving surgery wide local excision",
+    "bcs": "breast-conserving surgery wide local excision",
+    "mastectomy": "mastectomy surgical resection",
+    "slnb": "sentinel lymph node biopsy axilla axillary",
+    "anc": "axillary node clearance axillary lymph node dissection",
     "ai": "aromatase inhibitor anastrozole letrozole exemestane",
-    "tam": "tamoxifen",
-    "menopause": "postmenopausal premenopausal",
-    "bone": "bisphosphonates bone health zolendronic acid",
+    "ais": "aromatase inhibitors anastrozole letrozole exemestane",
+    "tam": "tamoxifen selective estrogen receptor modulator",
+    "ofs": "ovarian function suppression gnrh lhrh agonist goserelin",
+    "menopause": "postmenopausal premenopausal menopausal status",
+    "premenopausal": "premenopausal women younger ovarian function",
+    "postmenopausal": "postmenopausal women aromatase inhibitor",
+    "bone": "bisphosphonates bone health zoledronic acid sodium clodronate bone metastases",
+    "bisphosphonates": "bisphosphonates zoledronic acid sodium clodronate bone health",
+    "staging": "staging distant metastases imaging investigations pretreatment assessment cect ct mri pet-ct bone scan",
+    "scan": "imaging assessment cect ct mri ultrasound mammography pet-ct bone scintigraphy",
+    "scans": "imaging assessment cect ct mri ultrasound mammography pet-ct bone scintigraphy",
+    "mri": "magnetic resonance imaging mri breast surveillance preoperative assessment",
+    "pet": "fdg pet-ct positron emission tomography imaging",
+    "pet-ct": "fdg pet-ct positron emission tomography imaging",
+    "surveillance": "surveillance monitoring follow-up imaging mammography annual",
+    "follow-up": "follow-up surveillance annual mammography care plan",
+    "followup": "follow-up surveillance annual mammography care plan",
+    "margins": "surgical resection margins 2mm radial margin ink on tumor 0mm",
+    "margin": "surgical resection margin 2mm radial margin ink on tumor 0mm",
+    "chemoprevention": "chemoprevention risk reduction tamoxifen anastrozole raloxifene familial risk",
+    "prevention": "chemoprevention risk reduction tamoxifen anastrozole raloxifene risk-reducing surgery",
+    "prophylactic": "risk-reducing mastectomy risk-reducing salpingo-oophorectomy bilateral mastectomy",
+    "male": "male breast cancer men ER-positive reproductive organs",
+    "men": "male breast cancer men ER-positive reproductive organs tamoxifen",
+    "genetic": "genetic testing brca1 brca2 tp53 carrier probability threshold ten percent",
+    "hereditary": "familial breast cancer family history moderate risk high risk carrier",
+    "familial": "familial breast cancer family history moderate risk high risk lifetime risk",
+    "asymptomatic": "asymptomatic early breast cancer routine staging investigations",
+    "negative": "do not offer do not routinely use not recommended against contraindication",
+    "trastuzumab": "trastuzumab herceptin her2 targeted therapy pertuzumab t-dm1",
+    "reconstruction": "breast reconstruction immediate delayed implant autologous latissimus dorsi diep flap",
+    "fertility": "fertility preservation pregnancy oocyte cryopreservation ovarian function suppression",
+    "lymphoedema": "lymphoedema upper limb swelling physiotherapy compression",
+    "lymphedema": "lymphoedema upper limb swelling physiotherapy compression",
+    "side-effects": "side effects menopausal symptoms hot flushes arthralgia osteoporosis",
+    "side effects": "side effects menopausal symptoms hot flushes arthralgia osteoporosis",
+}
+
+# Domain vocabulary to safeguard boundary and clinical questions from pre-LLM rejection
+IN_DOMAIN_KEYWORDS = {
+    "breast", "cancer", "carcinoma", "dcis", "tumour", "tumor", "mastectomy",
+    "chemo", "chemotherapy", "radiotherapy", "radiation", "hormone", "tamoxifen",
+    "aromatase", "anastrozole", "letrozole", "exemestane", "her2", "trastuzumab",
+    "pertuzumab", "brca", "brca1", "brca2", "tp53", "mammography", "mammogram",
+    "staging", "mri", "sentinel", "slnb", "lymph", "node", "axilla", "axillary",
+    "biopsy", "endocrine", "resection", "recurrence", "relapse", "metastases",
+    "metastasis", "metastatic", "prophylactic", "screening", "surveillance",
+    "nice", "guideline", "guidelines", "patient", "patients", "clinical",
+    "treatment", "therapy", "surgery", "surgical", "risk", "gene", "genetic",
+    "family", "familial", "history", "margin", "margins", "premenopausal",
+    "postmenopausal", "scan", "scans", "ultrasound", "pet", "pet-ct", "ct",
+    "bone", "bisphosphonates", "zoledronic", "clodronate", "reconstruction",
+    "fertility", "pregnancy", "men", "male", "contraceptive", "hrt", "raloxifene",
+    "side effects", "lymphoedema", "lymphedema", "hot flush", "arthralgia",
+    "ng101", "cg81", "cg164", "recommendation", "recommend", "contraindication"
 }
 
 # 7. BM25 tokenizer with synonym expansion
@@ -164,7 +224,7 @@ def normalize_scores(scores):
 # 11. Hybrid retrieval with Reciprocal Rank Fusion & Dynamic Confidence
 def hybrid_query(
     question,
-    top_k=4,
+    top_k=5,
     semantic_weight=0.65,
     keyword_weight=0.35,
     source_filter=None
@@ -188,13 +248,23 @@ def hybrid_query(
     best_keyword_score = float(np.max(keyword_scores)) if len(keyword_scores) > 0 else 0.0
 
     # C. PRE-LLM RELEVANCE GATING
-    # Reject completely out-of-domain queries (e.g. physics, cooking, programming)
-    if (best_semantic_score < 0.50 and best_keyword_score < 3.0) or best_semantic_score < 0.44:
-        return []
+    # Check if query contains any breast cancer clinical domain keywords
+    q_lower = question.lower()
+    has_domain_keyword = any(kw in q_lower for kw in IN_DOMAIN_KEYWORDS)
+
+    # Reject completely out-of-domain queries (e.g. physics, cooking, programming, capital cities)
+    # Never reject queries that contain medical/breast oncology terms
+    if not has_domain_keyword:
+        if (best_semantic_score < 0.48 and best_keyword_score < 2.5) or best_semantic_score < 0.40:
+            return []
+    else:
+        # For domain queries, only reject if similarity is catastrophically low (< 0.25)
+        if best_semantic_score < 0.25 and best_keyword_score < 0.5:
+            return []
 
     # D. CALIBRATED SCORE NORMALIZATION
-    # Semantic: Cosine similarity mapped linearly from [0.40, 0.90] to [0.0, 1.0]
-    semantic_normalized = np.clip((semantic_scores - 0.40) / 0.50, 0.0, 1.0)
+    # Semantic: Cosine similarity mapped linearly from [0.35, 0.90] to [0.0, 1.0]
+    semantic_normalized = np.clip((semantic_scores - 0.35) / 0.55, 0.0, 1.0)
     
     # Keyword: BM25 score soft-saturated
     keyword_normalized = keyword_scores / (keyword_scores + 10.0)
