@@ -162,8 +162,6 @@ function createAnswer(data) {
           <i class="confidence-dot" style="background:${dotColor};box-shadow:0 0 0 3px ${dotColor}22;"></i>
           ${confidence}
         </strong>
-        <span>Source match</span>
-        <strong>${sourceMatch}</strong>
       </div>
 
       ${citations.length > 0 ? `
@@ -499,7 +497,7 @@ if (exportChatButton) {
           d.citations.forEach(c => exportContent += `• ${c.source} ${c.section} (${c.pages})\n`);
           exportContent += `\n`;
         }
-        exportContent += `Confidence: ${d.confidence} (Source Match: ${d.source_match})\n`;
+        exportContent += `Evidence Confidence: ${d.confidence}\n`;
         exportContent += `------------------------------------------------------------\n\n`;
       }
     });
