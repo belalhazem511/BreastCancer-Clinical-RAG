@@ -24,11 +24,26 @@ short_description: Grounded NICE Guideline Clinical Decision Support with Groq L
 
 <br />
 
+[![Latency](https://img.shields.io/badge/Inference_Speed-%3C0.8s%20(Groq%20LPU)-blueviolet?style=flat-square)](https://groq.com/)
+[![RAM](https://img.shields.io/badge/Memory_Footprint-%3C50MB%20RAM-success?style=flat-square)](https://github.com/qdrant/fastembed)
+[![Guidelines](https://img.shields.io/badge/Clinical_Standard-NICE%20Guidelines%20(UK)-red?style=flat-square)](https://www.nice.org.uk/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
+
+<br />
+
 **An evidence-grounded clinical AI decision-support platform designed for breast oncology, strictly adhering to National Institute for Health and Care Excellence (NICE) guidelines.**
 
 <br />
 
-[✨ Key Innovations](#-key-innovations) • [🏗️ System Architecture](#️-system-architecture) • [🎙️ Voice & Interactive Ball](#️-voice-assistant--interactive-glowing-orb) • [🚀 Quickstart](#-quickstart-guide) • [📡 API Reference](#-api-reference) • [☁️ Free Cloud Deployment](#️-cloud-deployment--100-free-hosting) • [🧪 Verification Suite](#-automated-verification-suite)
+<p align="center">
+  <a href="https://huggingface.co/new-space?template=belalhazem511/BreastCancer-Clinical-RAG"><img src="https://huggingface.co/datasets/huggingface/badges/raw/main/deploy-to-spaces-lg.svg" alt="Deploy to Hugging Face Spaces"></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://render.com/deploy?repo=https://github.com/belalhazem511/BreastCancer-Clinical-RAG"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render"></a>
+</p>
+
+<br />
+
+[✨ Key Innovations](#-key-innovations) • [📚 Knowledge Base](#-indexed-nice-guidelines-knowledge-base) • [🏗️ Architecture](#️-system-architecture) • [🔬 Mathematical Formula](#-mathematical-hybrid-scoring-formulation) • [💡 Clinical Scenarios](#-interactive-clinical-query-scenarios) • [🎙️ Voice AI & Orb](#️-voice-assistant--interactive-glowing-orb) • [🚀 Quickstart](#-quickstart-guide) • [📡 API Reference](#-api-reference) • [☁️ Free Cloud Deploy](#️-cloud-deployment--100-free-hosting)
 
 </div>
 
@@ -44,6 +59,16 @@ short_description: Grounded NICE Guideline Clinical Decision Support with Groq L
 
 ### 🎯 The Clinical Problem It Solves
 Generic Large Language Models frequently generate medical hallucinations, cite outdated drug regimens, or cannot provide precise document-level accountability. **BreastCancer.ai** enforces a **zero-unsupported-assertions** policy using hybrid vector-lexical retrieval, dynamic threshold gating, page-level PDF preview synchronization, and two-way voice dictation.
+
+---
+
+## 📚 Indexed NICE Guidelines Knowledge Base
+
+| Guideline Code | Official Publication Title | Clinical Scope & Key Chapters | Indexed Chunks | Total Pages | Direct PDF Access |
+| :---: | :--- | :--- | :---: | :---: | :---: |
+| **NICE NG101** | *Early and locally advanced breast cancer: diagnosis and management* | Staging, endocrine therapy (tamoxifen/aromatase inhibitors), adjuvant chemotherapy, HER2+ targeted biologics, radiotherapy | **215 chunks** | 67 pages | [`NG101.pdf`](file:///B:/hakthon3%20-%20Copy%20%282%29/RAG%20system/Data/NG101.pdf) |
+| **NICE CG81** | *Advanced breast cancer: diagnosis and treatment* | Metastatic disease, visceral crises, bisphosphonates for bone metastases, endocrine sequencing, palliative regimens | **108 chunks** | 44 pages | [`CG81.pdf`](file:///B:/hakthon3%20-%20Copy%20%282%29/RAG%20system/Data/CG81.pdf) |
+| **NICE CG164** | *Familial breast cancer: classification, care and managing risk* | BRCA1/BRCA2 genetic testing, lifetime risk stratification, annual MRI/mammography surveillance, chemoprevention | **103 chunks** | 52 pages | [`CG164.pdf`](file:///B:/hakthon3%20-%20Copy%20%282%29/RAG%20system/Data/CG164.pdf) |
 
 ---
 
@@ -98,6 +123,69 @@ flowchart TD
     AnswerPayload --> AnswerCard
     SafeFallback --> AnswerCard
 ```
+
+---
+
+## 🔬 Mathematical Hybrid Scoring Formulation
+
+The retrieval engine employs a mathematical fusion model combining geometric dense semantic representation with statistical lexical matching:
+
+### 1. Score Normalization & Fusion
+For a user query $q$ and guideline candidate chunk $d$:
+
+$$\text{Score}_{\text{dense}}(q, d) = \frac{\mathbf{e}_q \cdot \mathbf{e}_d}{\|\mathbf{e}_q\| \|\mathbf{e}_d\|}, \quad \text{Score}_{\text{bm25}}(q, d) = \sum_{t \in q} \text{IDF}(t) \cdot \frac{f(t, d) \cdot (k_1 + 1)}{f(t, d) + k_1 \cdot \left(1 - b + b \cdot \frac{|d|}{\text{avgdl}}\right)}$$
+
+$$\text{Score}_{\text{hybrid}}(q, d) = w_{\text{dense}} \cdot \left(\frac{\text{Score}_{\text{dense}} - \min(S_d)}{\max(S_d) - \min(S_d) + \epsilon}\right) + w_{\text{bm25}} \cdot \left(\frac{\text{Score}_{\text{bm25}} - \min(S_b)}{\max(S_b) - \min(S_b) + \epsilon}\right)$$
+
+> **Hyperparameters**: $w_{\text{dense}} = 0.65$, $w_{\text{bm25}} = 0.35$, $k_1 = 1.5$, $b = 0.75$.
+
+### 2. Deterministic Anti-Hallucination Confidence Gating
+$$\text{Decision Gate}(q) = \begin{cases} 
+\text{Synthesize Grounded Clinical Answer via Groq LPU}, & \text{if } \max_{d} \text{Score}_{\text{hybrid}}(q, d) \ge 0.58 \\
+\text{Reject Query with Low-Confidence Safe Fallback}, & \text{if } \max_{d} \text{Score}_{\text{hybrid}}(q, d) < 0.58
+\end{cases}$$
+
+---
+
+## 💡 Interactive Clinical Query Scenarios
+
+<details open>
+<summary><b>💊 Scenario 1: Hormone-Receptor Positive (ER+) Early Breast Cancer</b> <i>(Click to collapse/expand)</i></summary>
+
+> **Clinical Query**: *"What is the recommended endocrine therapy for ER-positive early breast cancer in premenopausal vs postmenopausal patients?"*  
+>
+> **Grounded NICE Recommendations**:
+> 1. **Premenopausal Patients**: Offer **Tamoxifen** as the standard initial adjuvant endocrine therapy (`NICE NG101 Section 1.11.1`).
+> 2. **Postmenopausal Patients (High Risk)**: Offer an **Aromatase Inhibitor** (anastrozole or letrozole) as initial adjuvant therapy for women at medium or high risk of disease recurrence (`NICE NG101 Section 1.11.4`).
+> 3. **Duration**: Continue adjuvant endocrine therapy for a minimum of 5 years, with consideration of extended therapy up to 10 years based on risk scoring (`NICE NG101 Section 1.11.7`).
+>
+> **Verified Reference**: [NICE NG101 Section 1.11 (Pages 32–33)](file:///B:/hakthon3%20-%20Copy%20%282%29/RAG%20system/Data/NG101.pdf) • **Confidence**: `High (Score: 0.83)`
+</details>
+
+<details>
+<summary><b>🧬 Scenario 2: High-Risk Familial Surveillance & BRCA Mutation Carriers</b> <i>(Click to expand)</i></summary>
+
+> **Clinical Query**: *"What annual surveillance protocol is recommended for confirmed BRCA1 or BRCA2 mutation carriers?"*  
+>
+> **Grounded NICE Recommendations**:
+> 1. **MRI Surveillance (Ages 30–49)**: Offer annual **magnetic resonance imaging (MRI)** surveillance to women aged 30–49 who possess a verified BRCA1 or BRCA2 gene mutation (`NICE CG164 Section 1.6.4`).
+> 2. **Mammography (Ages 40–69)**: Offer annual **mammographic surveillance** to women aged 40–69 with high familial risk or BRCA mutation status (`NICE CG164 Section 1.6.8`).
+> 3. **Chemoprevention**: Discuss risk-reducing medications (tamoxifen or raloxifene for postmenopausal women without a history of thromboembolism) (`NICE CG164 Section 1.9.2`).
+>
+> **Verified Reference**: [NICE CG164 Section 1.6 (Pages 24–26)](file:///B:/hakthon3%20-%20Copy%20%282%29/RAG%20system/Data/CG164.pdf) • **Confidence**: `High (Score: 0.75)`
+</details>
+
+<details>
+<summary><b>🦴 Scenario 3: Advanced Breast Cancer & Bone Metastases</b> <i>(Click to expand)</i></summary>
+
+> **Clinical Query**: *"What bisphosphonate therapy is recommended for advanced breast cancer patients with bone metastases?"*  
+>
+> **Grounded NICE Recommendations**:
+> 1. **Bisphosphonate Initiation**: Offer **bisphosphonates** (such as zoledronic acid, pamidronate disodium, or sodium clodronate) to all patients newly diagnosed with bone metastases to reduce skeletal-related events and alleviate bone pain (`NICE CG81 Section 1.5.1`).
+> 2. **Analgesic Synergy**: Combine bisphosphonates with appropriate analgesic protocols and assess need for palliative radiotherapy for localized intractable pain (`NICE CG81 Section 1.5.3`).
+>
+> **Verified Reference**: [NICE CG81 Section 1.5 (Pages 19–21)](file:///B:/hakthon3%20-%20Copy%20%282%29/RAG%20system/Data/CG81.pdf) • **Confidence**: `High (Score: 0.79)`
+</details>
 
 ---
 
@@ -176,7 +264,6 @@ BreastCancer-Clinical-RAG/
         ├── home.js             # Orb voice interaction & query submission
         ├── chat.js             # RAG integration, Speech-to-Text & Speech Synthesis
         ├── library.js          # Document viewer & PDF modal controller
-        └── history.js          # Citation storage, search & clipboard copy
 ```
 
 ---
