@@ -1,4 +1,16 @@
-﻿# 🩺 BreastCancer.ai — Clinical RAG Decision-Support Platform
+﻿---
+title: BreastCancer.ai Clinical RAG
+emoji: 🩺
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+short_description: Grounded NICE Guideline Clinical Decision Support with Groq LPU
+---
+
+# 🩺 BreastCancer.ai — Clinical RAG Decision-Support Platform
 
 <div align="center">
 
@@ -12,7 +24,7 @@
 
 **An evidence-grounded clinical AI decision-support platform designed for breast oncology, strictly adhering to National Institute for Health and Care Excellence (NICE) guidelines.**
 
-[Live Demo & Deployment](#-cloud-deployment--free-hosting) • [Architecture](#-system-architecture) • [Features](#-key-features) • [Quickstart](#-quickstart-guide) • [API Reference](#-api-reference) • [Verification](#-automated-verification-suite)
+[System Architecture](#-system-architecture) • [Key Features](#-key-features) • [Quickstart Guide](#-quickstart-guide) • [API Reference](#-api-reference) • [Cloud Deployment](#-cloud-deployment--free-hosting) • [Verification Suite](#-automated-verification-suite)
 
 </div>
 
@@ -105,7 +117,7 @@ flowchart TD
 ├── run.bat                     # Windows batch launcher
 ├── verify_full_cycle.py        # Automated end-to-end verification test suite
 ├── requirements.txt            # Python production dependencies
-├── Dockerfile                  # Multi-stage production container configuration
+├── Dockerfile                  # Multi-stage production container configuration (Hugging Face / Render / Koyeb)
 ├── docker-compose.yml          # Container orchestration configuration
 ├── render.yaml                 # 1-Click Render Cloud deployment blueprint
 ├── Procfile                    # PaaS process configuration
@@ -346,36 +358,28 @@ python verify_full_cycle.py
 
 ## ☁️ Cloud Deployment & Free Hosting
 
-### 1. Render (Free Web Service / Blueprint)
-1. Fork or push this repository to GitHub.
-2. Sign up on [Render.com](https://render.com).
-3. Click **New +** -> **Web Service** -> Connect your GitHub repository.
-4. Set:
-   - **Environment**: `Python 3`
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn server:app --host 0.0.0.0 --port $PORT`
-5. Add Environment Variable:
-   - `GROQ_API_KEY`: `your_groq_api_key`
-6. Click **Deploy**.
+### 1. Hugging Face Spaces (Free 100% Free CPU Docker)
+1. Go to [Hugging Face Spaces](https://huggingface.co/new-space).
+2. Space Name: `breastcancer-rag`
+3. Space SDK: **Docker** (Blank)
+4. Set Space visibility to **Public**.
+5. Click **Create Space**.
+6. Go to **Settings** → **Variables and secrets** → **New secret**:
+   - Name: `GROQ_API_KEY`
+   - Value: `your_groq_api_key`
+7. Push code from GitHub or clone space repo:
+   ```bash
+   git remote add space https://huggingface.co/spaces/<your-username>/breastcancer-rag
+   git push space main
+   ```
+8. Hugging Face will automatically build your Docker container on port `7860` and provide a free permanent public URL.
 
-*(Alternatively, use the included `render.yaml` for automatic 1-click Blueprint deployment).*
-
-### 2. Hugging Face Spaces (Free CPU Docker)
-1. Create a new Space on [Hugging Face Spaces](https://huggingface.co/spaces).
-2. Choose **Docker** SDK (Blank).
-3. Connect your GitHub repository or push directly.
-4. In Space Settings, add the repository secret `GROQ_API_KEY`.
-5. Hugging Face will automatically build the `Dockerfile` and launch your clinical application.
-
-### 3. Koyeb / Railway / Fly.io
-Deploy directly via Docker:
-```bash
-# Build image
-docker build -t breastcancer-ai .
-
-# Run container with environment key
-docker run -d -p 8000:8000 -e GROQ_API_KEY="your_groq_api_key" breastcancer-ai
-```
+### 2. Render (Free Web Service / Blueprint)
+1. Go to [Render Dashboard](https://dashboard.render.com/) and click **New +** -> **Web Service**.
+2. Connect repository `belalhazem511/BreastCancer-Clinical-RAG`.
+3. Set Build Command: `pip install -r requirements.txt` and Start Command: `uvicorn server:app --host 0.0.0.0 --port $PORT`.
+4. Add Environment Variable: `GROQ_API_KEY`.
+5. Click **Deploy**.
 
 ---
 
