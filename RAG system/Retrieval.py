@@ -2,7 +2,6 @@ from pathlib import Path
 import json
 import re
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from rank_bm25 import BM25Okapi
 
 # 1. File paths

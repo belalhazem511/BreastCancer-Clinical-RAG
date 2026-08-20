@@ -1,4 +1,4 @@
-﻿---
+---
 title: BreastCancer.ai Clinical RAG
 emoji: 🩺
 colorFrom: blue
@@ -69,8 +69,8 @@ flowchart TD
 
     subgraph LLM ["Clinical Grounding & Inference (Groq)"]
         L --> M{Similarity Threshold Check}
-        M -->|Threshold Rejection (< 0.58)| N["Out-of-Context Safe Fallback"]
-        M -->|Confidence Met (>= 0.58)| O["Medical Grounding Prompt Template"]
+        M -->|"Threshold Rejection (Below 0.58)"| N["Out-of-Context Safe Fallback"]
+        M -->|"Confidence Met (0.58 or Higher)"| O["Medical Grounding Prompt Template"]
         O --> P["Groq Fast LPU Chain (GPT-OSS-120B / Qwen-27B / Compound)"]
         P --> Q["Structured JSON Response Parser"]
         Q --> R["Recommendations + Evidence + Confidence + Exact Citations"]
