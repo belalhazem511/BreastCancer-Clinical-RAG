@@ -4,27 +4,31 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8000
+    PORT=7860
 
-# Install build tools and curl for healthchecks
+# Install build dependencies and curl
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Create a non-root user for Hugging Face Spaces compatibility
+RUN useradd -m -u 1000 user
+USER user
+ENV HOME=/home/user \
+    PATH=/home/user/.local/bin:$PATH
 
-# Copy source code and clinical data
-COPY . .
+WORKDIR $HOME/app
 
-# Expose port
-EXPOSE 8000
+# Install Python requirements
+COPY --chown=user:user requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:8000/api/health || exit 1
+# Copy application files and clinical knowledge base
+COPY --chown=user:user . .
 
-# Start the application
-CMD ["sh", "-c", "uvicorn server:app --host 0.0.0.0 --port "]
+# Hugging Face Spaces exposes port 7860 by default
+EXPOSE 7860
+
+# Start FastAPI application
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "7860"]
