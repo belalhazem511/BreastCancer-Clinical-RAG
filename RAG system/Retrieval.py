@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import re
+import difflib
 import numpy as np
 from rank_bm25 import BM25Okapi
 
@@ -252,7 +253,145 @@ tokenized_chunks = [tokenize(text, expand_synonyms=False) for text in texts_for_
 # 9. Build BM25 index
 bm25 = BM25Okapi(tokenized_chunks)
 
-# 10. Normalization helpers
+# 10. Master Clinical Vocabulary and Typo Normalizer
+_ALL_TERMS = set()
+for tokens in tokenized_chunks:
+    _ALL_TERMS.update(tokens)
+
+for k, v in SYNONYMS.items():
+    _ALL_TERMS.add(k)
+    _ALL_TERMS.update(v.split())
+
+_ALL_TERMS.update(BREAST_DOMAIN_KEYWORDS)
+_COMMON_QUESTION_TERMS = {
+    "what", "which", "when", "where", "who", "whom", "whose", "why", "how",
+    "should", "would", "could", "can", "will", "shall", "is", "are", "was",
+    "were", "do", "does", "did", "have", "has", "had", "for", "with", "from",
+    "about", "between", "during", "after", "before", "give", "given", "giving",
+    "offer", "offered", "offering", "recommend", "recommended", "recommendation",
+    "recommendations", "criteria", "threshold", "thresholds", "guideline",
+    "guidelines", "nice", "patient", "patients", "people", "person", "woman",
+    "women", "female", "man", "men", "male", "age", "years", "old", "older",
+    "young", "younger", "dose", "dosing", "dosage", "interval", "duration",
+    "early", "advanced", "metastatic", "invasive", "pure", "stage", "stages",
+    "grade", "grades", "type", "types", "test", "tests", "testing", "management",
+    "treatment", "treatments", "therapy", "therapies", "surgery", "surgical",
+    "scan", "scans", "scanning", "image", "images", "imaging", "risk", "risks",
+    "high", "medium", "low", "moderate", "negative", "positive", "contraindication",
+    "contraindications", "routine", "routinely", "asymptomatic", "symptomatic",
+    "follow-up", "followup", "surveillance", "prevent", "prevention", "chemoprevention",
+    "margin", "margins", "ink", "clear", "involved", "re-excision", "mastectomy",
+    "lumpectomy", "biopsy", "resection", "side-effects", "side", "effects", "needed",
+    "triple", "receptor", "suppression", "without", "less", "than", "more"
+}
+_ALL_TERMS.update(_COMMON_QUESTION_TERMS)
+
+CLINICAL_VOCAB_SET = set(_ALL_TERMS)
+CLINICAL_VOCAB_LIST = sorted(list(CLINICAL_VOCAB_SET))
+
+SHORT_TYPOS = {
+    "wht": "what", "wat": "what", "whtat": "what", "whaat": "what",
+    "iz": "is", "iss": "is", "ar": "are", "shd": "should", "shud": "should",
+    "shoud": "should", "dcs": "dcis", "canr": "cancer", "cancr": "cancer",
+    "cancerr": "cancer", "brest": "breast", "breasst": "breast",
+    "womann": "woman", "womn": "women", "patiens": "patients",
+    "stagng": "staging", "erly": "early", "endcrine": "endocrine",
+    "therpy": "therapy", "trtment": "treatment", "treatmnt": "treatment",
+    "treatmeent": "treatment", "neeeded": "needed", "needd": "needed",
+    "guidline": "guideline", "guidlines": "guidelines", "inhibitrs": "inhibitors",
+    "aromatsee": "aromatase", "chemopreventin": "chemoprevention",
+    "withought": "without", "genetc": "genetic", "testng": "testing",
+    "criterea": "criteria", "recomnded": "recommended", "reccomended": "recommended",
+    "trippple": "triple", "negattive": "negative", "mastecomy": "mastectomy",
+    "ovrian": "ovarian", "suppresion": "suppression", "premenopausll": "premenopausal",
+    "postmenopausll": "postmenopausal", "plz": "please", "thn": "than", "usd": "used"
+}
+
+
+def normalize_and_correct_query(query: str) -> str:
+    """
+    Clean, de-duplicate elongated characters, correct typos against clinical vocabulary,
+    and normalize punctuation.
+    """
+    if not query or not query.strip():
+        return ""
+
+    text = query.strip()
+    # Remove repeated punctuation
+    text = re.sub(r"[?!]{2,}", " ", text)
+    # Remove excessive symbols while keeping alphanumeric, +, -, %, /, .
+    text = re.sub(r"[^a-zA-Z0-9\+\-\%\/\.\s]", " ", text)
+
+    raw_tokens = text.split()
+    corrected_tokens = []
+
+    for token in raw_tokens:
+        lower_tok = token.lower().strip(".,;:?!")
+        if not lower_tok:
+            continue
+
+        # Keep pure numbers, decimals, percentages, or mm units (e.g. 2mm, 10%, 1.4)
+        if re.match(r"^\d+(?:\.\d+)*%?$", lower_tok) or re.match(r"^\d+mm$", lower_tok):
+            corrected_tokens.append(lower_tok)
+            continue
+
+        # Keep valid receptor abbreviations (er+, pr+, her2+, er-, pr-, her2-, t-dm1)
+        if lower_tok in {"er+", "pr+", "her2+", "er-", "pr-", "her2-", "t-dm1"}:
+            corrected_tokens.append(lower_tok)
+            continue
+
+        # Known short typos
+        if lower_tok in SHORT_TYPOS:
+            corrected_tokens.append(SHORT_TYPOS[lower_tok])
+            continue
+
+        # Exact match in vocabulary
+        if lower_tok in CLINICAL_VOCAB_SET:
+            corrected_tokens.append(lower_tok)
+            continue
+
+        # Collapse 3+ repeated characters (e.g. whhhhhat -> what, isss -> is, treatmenttt -> treatment)
+        collapsed_3 = re.sub(r"(.)\1{2,}", r"\1", lower_tok)
+        if collapsed_3 in SHORT_TYPOS:
+            corrected_tokens.append(SHORT_TYPOS[collapsed_3])
+            continue
+        if collapsed_3 in CLINICAL_VOCAB_SET:
+            corrected_tokens.append(collapsed_3)
+            continue
+
+        # Collapse 2 repeated characters (e.g. breasst -> breast, cancerr -> cancer)
+        collapsed_2 = re.sub(r"(.)\1+", r"\1", lower_tok)
+        if collapsed_2 in SHORT_TYPOS:
+            corrected_tokens.append(SHORT_TYPOS[collapsed_2])
+            continue
+        if collapsed_2 in CLINICAL_VOCAB_SET:
+            corrected_tokens.append(collapsed_2)
+            continue
+
+        # Fuzzy spell match for tokens with length >= 4
+        if len(lower_tok) >= 4:
+            match = difflib.get_close_matches(lower_tok, CLINICAL_VOCAB_LIST, n=1, cutoff=0.72)
+            if match:
+                corrected_tokens.append(match[0])
+                continue
+
+            match_c3 = difflib.get_close_matches(collapsed_3, CLINICAL_VOCAB_LIST, n=1, cutoff=0.72)
+            if match_c3:
+                corrected_tokens.append(match_c3[0])
+                continue
+
+            match_c2 = difflib.get_close_matches(collapsed_2, CLINICAL_VOCAB_LIST, n=1, cutoff=0.70)
+            if match_c2:
+                corrected_tokens.append(match_c2[0])
+                continue
+
+        # Fallback to lower_tok
+        corrected_tokens.append(lower_tok)
+
+    return " ".join(corrected_tokens)
+
+
+# 11. Normalization helpers
 def normalize_scores(scores):
     """Normalize raw scores into [0, 1] range safely."""
     minimum = np.min(scores)
@@ -261,7 +400,7 @@ def normalize_scores(scores):
         return np.zeros_like(scores, dtype=np.float32)
     return (scores - minimum) / (maximum - minimum)
 
-# 11. Hybrid retrieval with Reciprocal Rank Fusion & Dynamic Confidence
+# 12. Hybrid retrieval with Reciprocal Rank Fusion & Dynamic Confidence
 def hybrid_query(
     question,
     top_k=5,
@@ -272,19 +411,24 @@ def hybrid_query(
     """
     Perform calibrated hybrid retrieval combining BGE dense semantic search
     and BM25 keyword matching with Reciprocal Rank Fusion (RRF).
+    Auto-corrects typos and elongated characters.
     """
+    # 0. NORMALIZE & CORRECT QUERY
+    normalized_q = normalize_and_correct_query(question)
+    q_to_search = normalized_q if normalized_q else question
+
     # 1. HARD OUT-OF-SCOPE GATING
-    if is_hard_out_of_scope(question):
+    if is_hard_out_of_scope(q_to_search):
         return []
 
     # A. SEMANTIC RETRIEVAL - BGE
-    query_embedding = encode_query_vector(question)
+    query_embedding = encode_query_vector(q_to_search)
     semantic_scores = embeddings @ query_embedding
 
     # B. KEYWORD RETRIEVAL - BM25 with query expansion
-    query_tokens = tokenize(question, expand_synonyms=True)
+    query_tokens = tokenize(q_to_search, expand_synonyms=True)
     if not query_tokens:
-        query_tokens = tokenize(question, expand_synonyms=False)
+        query_tokens = tokenize(q_to_search, expand_synonyms=False)
         
     keyword_scores = np.array(bm25.get_scores(query_tokens), dtype=np.float32)
 
@@ -292,7 +436,7 @@ def hybrid_query(
     best_keyword_score = float(np.max(keyword_scores)) if len(keyword_scores) > 0 else 0.0
 
     # C. PRE-LLM RELEVANCE GATING
-    q_lower = question.lower()
+    q_lower = q_to_search.lower()
     has_breast_keyword = any(kw in q_lower for kw in BREAST_DOMAIN_KEYWORDS)
 
     if not has_breast_keyword:

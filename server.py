@@ -411,8 +411,12 @@ def parse_llm_response(
     if summary:
         summary = re.sub(r"^[\*\#\-\s:]+", "", summary).strip()
         summary = re.sub(r"[\*\#]+$", "", summary).strip()
-        # If extracted summary is a reasoning artifact, clear it to fallback to recommendation
-        if len(summary) < 5 or any(k in summary.lower() for k in ["scan retrieved", "thinking process", "analyze query", "here is"]):
+        # If extracted summary is a reasoning or chat artifact, clear it to fallback to recommendation
+        if len(summary) < 5 or any(k in summary.lower() for k in [
+            "scan retrieved", "thinking process", "analyze query", "here is",
+            "i'll make sure", "based strictly", "strictly on the retrieved",
+            "let me synthesize", "from the provided nice guideline"
+        ]):
             summary = ""
 
     # If recommendations exist but confidence was set to Low, upgrade to High/Medium
@@ -644,12 +648,16 @@ async def serve_pdf(filename: str):
 
 @app.post("/api/chat")
 async def chat_endpoint(payload: ChatRequest):
-    question = payload.question.strip()
-    if not question:
+    raw_question = payload.question.strip()
+    if not raw_question:
         raise HTTPException(
             status_code=400,
             detail="Question cannot be empty.",
         )
+
+    # Clean, de-duplicate elongated letters, and correct typos
+    corrected_question = Retrieval.normalize_and_correct_query(raw_question)
+    question = corrected_question if corrected_question else raw_question
 
     source_filter = payload.source_filter
     top_k = payload.top_k or 5
