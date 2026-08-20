@@ -604,7 +604,14 @@ if (chatVoiceMicButton) {
 
     recognition.onend = () => {
       stopListening();
-      chatInput.focus();
+      const question = chatInput.value.trim();
+      if (question) {
+        setTimeout(() => {
+          sendMessage();
+        }, 350);
+      } else {
+        chatInput.focus();
+      }
     };
 
     function stopListening() {

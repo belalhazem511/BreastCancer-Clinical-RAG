@@ -108,7 +108,14 @@ if (homeVoiceMicButton) {
 
     recognition.onend = () => {
       stopListening();
-      questionInput.focus();
+      const question = questionInput.value.trim();
+      if (question) {
+        setTimeout(() => {
+          sendCurrentQuestion();
+        }, 350);
+      } else {
+        questionInput.focus();
+      }
     };
 
     function stopListening() {
