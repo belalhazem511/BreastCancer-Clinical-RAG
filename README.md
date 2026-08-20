@@ -35,14 +35,6 @@ short_description: Grounded NICE Guideline Clinical Decision Support with Groq L
 
 <br />
 
-<p align="center">
-  <a href="https://huggingface.co/new-space?template=belalhazem511/BreastCancer-Clinical-RAG"><img src="https://huggingface.co/datasets/huggingface/badges/raw/main/deploy-to-spaces-lg.svg" alt="Deploy to Hugging Face Spaces"></a>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://render.com/deploy?repo=https://github.com/belalhazem511/BreastCancer-Clinical-RAG"><img src="https://render.com/images/deploy-to-render-button.svg" alt="Deploy to Render"></a>
-</p>
-
-<br />
-
 [✨ Key Innovations](#-key-innovations) • [📚 Knowledge Base](#-indexed-nice-guidelines-knowledge-base) • [🏗️ Architecture](#️-system-architecture) • [🔬 Mathematical Formula](#-mathematical-hybrid-scoring-formulation) • [💡 Clinical Scenarios](#-interactive-clinical-query-scenarios) • [🎙️ Voice AI & Orb](#️-voice-assistant--interactive-glowing-orb) • [🚀 Quickstart](#-quickstart-guide) • [📡 API Reference](#-api-reference) • [☁️ Free Cloud Deploy](#️-cloud-deployment--100-free-hosting)
 
 </div>
