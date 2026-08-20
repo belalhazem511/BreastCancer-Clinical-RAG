@@ -550,6 +550,76 @@ chatInput.addEventListener('input', () => {
 });
 drawerClose.addEventListener('click', closeEvidence);
 
+// Voice Recognition (Speech-to-Text) in Chat
+const chatVoiceMicButton = document.getElementById('chatVoiceMicButton');
+if (chatVoiceMicButton) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    let isListening = false;
+    const originalPlaceholder = chatInput.placeholder;
+
+    chatVoiceMicButton.addEventListener('click', () => {
+      if (isListening) {
+        recognition.stop();
+      } else {
+        try {
+          recognition.start();
+        } catch (err) {
+          console.warn('Chat speech recognition start error:', err);
+        }
+      }
+    });
+
+    recognition.onstart = () => {
+      isListening = true;
+      chatVoiceMicButton.classList.add('is-recording');
+      chatVoiceMicButton.setAttribute('title', 'Listening... Click to stop');
+      chatInput.placeholder = 'Listening... Speak your question now';
+    };
+
+    recognition.onresult = (event) => {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      if (transcript.trim()) {
+        chatInput.value = transcript;
+        chatInput.style.height = 'auto';
+        chatInput.style.height = `${Math.min(chatInput.scrollHeight, 120)}px`;
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.warn('Chat speech recognition error:', event.error);
+      stopListening();
+      if (event.error === 'not-allowed') {
+        alert('Microphone access was blocked. Please enable microphone permission in your browser to use voice input.');
+      }
+    };
+
+    recognition.onend = () => {
+      stopListening();
+      chatInput.focus();
+    };
+
+    function stopListening() {
+      isListening = false;
+      chatVoiceMicButton.classList.remove('is-recording');
+      chatVoiceMicButton.setAttribute('title', 'Click to speak');
+      chatInput.placeholder = originalPlaceholder;
+    }
+  } else {
+    chatVoiceMicButton.addEventListener('click', () => {
+      alert('Speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.');
+    });
+  }
+}
+
 // Initialize Page
 renderRecentChats();
 

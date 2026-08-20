@@ -55,3 +55,71 @@ suggestionCards.forEach((card) => {
     ], { duration: 170, easing: 'ease' });
   });
 });
+
+// Voice Recognition (Speech-to-Text)
+const homeVoiceMicButton = document.getElementById('homeVoiceMicButton');
+if (homeVoiceMicButton) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    let isListening = false;
+    const originalPlaceholder = questionInput.placeholder;
+
+    homeVoiceMicButton.addEventListener('click', () => {
+      if (isListening) {
+        recognition.stop();
+      } else {
+        try {
+          recognition.start();
+        } catch (err) {
+          console.warn('Speech recognition start error:', err);
+        }
+      }
+    });
+
+    recognition.onstart = () => {
+      isListening = true;
+      homeVoiceMicButton.classList.add('is-recording');
+      homeVoiceMicButton.setAttribute('title', 'Listening... Click to stop');
+      questionInput.placeholder = 'Listening... Speak your clinical question now';
+    };
+
+    recognition.onresult = (event) => {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      if (transcript.trim()) {
+        questionInput.value = transcript;
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.warn('Speech recognition error:', event.error);
+      stopListening();
+      if (event.error === 'not-allowed') {
+        alert('Microphone access was blocked. Please enable microphone permission in your browser to use voice input.');
+      }
+    };
+
+    recognition.onend = () => {
+      stopListening();
+      questionInput.focus();
+    };
+
+    function stopListening() {
+      isListening = false;
+      homeVoiceMicButton.classList.remove('is-recording');
+      homeVoiceMicButton.setAttribute('title', 'Click to speak');
+      questionInput.placeholder = originalPlaceholder;
+    }
+  } else {
+    homeVoiceMicButton.addEventListener('click', () => {
+      alert('Speech recognition is not supported in this browser. Please use Google Chrome, Microsoft Edge, or Safari.');
+    });
+  }
+}
