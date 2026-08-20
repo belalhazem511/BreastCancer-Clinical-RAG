@@ -55,6 +55,17 @@ function renderHistory(search = '') {
 
     const actions = document.createElement('div');
     actions.className = 'history-actions';
+    const openPdf = document.createElement('a');
+    openPdf.className = 'history-open-pdf';
+    openPdf.textContent = 'View PDF ↗';
+    const shortCode = String(item.source || '').includes('CG164') ? 'CG164' : (String(item.source || '').includes('CG81') ? 'CG81' : 'NG101');
+    const startPgMatch = String(item.pages || '').match(/\d+/);
+    const startPg = startPgMatch ? startPgMatch[0] : '1';
+    openPdf.href = `/api/pdf/${shortCode}.pdf#page=${startPg}`;
+    openPdf.target = '_blank';
+    openPdf.rel = 'noopener';
+    openPdf.style.cssText = 'font-size:12px;color:#2e7d32;background:rgba(75,190,125,0.12);padding:4px 8px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-flex;align-items:center;';
+
     const copy = document.createElement('button');
     copy.className = 'copy-history';
     copy.type = 'button';
@@ -63,7 +74,7 @@ function renderHistory(search = '') {
     askAgain.className = 'ask-again';
     askAgain.type = 'button';
     askAgain.textContent = 'Ask again';
-    actions.append(copy, askAgain);
+    actions.append(openPdf, copy, askAgain);
 
     copy.addEventListener('click', async () => {
       const citation = `${item.source} - ${item.section}, ${item.pages}`;

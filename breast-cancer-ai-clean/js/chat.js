@@ -113,17 +113,21 @@ function createAnswer(data) {
   if (confidence.toLowerCase() === 'medium') dotColor = '#f5a623';
   if (confidence.toLowerCase() === 'low') dotColor = '#e74c3c';
 
-  // Build source chips
+  // Build source chips with direct PDF jump capability
   let chipsHtml = '';
   if (citations.length > 0) {
     citations.forEach((c, idx) => {
+      const pageNum = c.start_page || c.firstPage || 1;
+      const pdfUrl = `${c.pdf_url || `/api/pdf/${c.filename || c.shortSource + '.pdf'}`}#page=${pageNum}`;
       chipsHtml += `
-        <button class="source-chip evidence-trigger" type="button" data-citation-index="${idx}" title="${escapeHtml(c.source_name)}">
-          ${c.source} ${c.section}
-        </button>
-        <button class="source-chip evidence-trigger" type="button" data-citation-index="${idx}">
-          ${c.pages}
-        </button>
+        <div class="source-chip-wrapper" style="display:inline-flex;align-items:center;margin:3px 6px 3px 0;gap:4px;background:rgba(235,247,240,0.6);padding:2px 6px;border-radius:14px;border:1px solid rgba(75,190,125,0.25);">
+          <button class="source-chip evidence-trigger" type="button" data-citation-index="${idx}" title="${escapeHtml(c.source_name)} - Click to view excerpt">
+            📑 ${c.source} ${c.section} (${c.pages})
+          </button>
+          <a class="source-pdf-link" href="${pdfUrl}" target="_blank" rel="noopener" title="Jump directly to Page ${pageNum} in ${c.filename || 'PDF'}" style="display:inline-flex;align-items:center;padding:3px 7px;background:#4bbe7d;color:#ffffff;border-radius:10px;font-size:11px;font-weight:600;text-decoration:none;transition:all 0.2s ease;">
+            Jump to PDF ↗
+          </a>
+        </div>
       `;
     });
   } else {
@@ -437,9 +441,10 @@ function openEvidence(citation, index = 0) {
   }
 
   if (drawerOpenPdfBtn) {
+    const pageNum = citation.start_page || citation.firstPage || 1;
+    drawerOpenPdfBtn.textContent = `Open Full PDF (Page ${pageNum}) ↗`;
     drawerOpenPdfBtn.onclick = () => {
-      const pageNum = citation.start_page || citation.firstPage || 1;
-      const pdfUrl = `${API_BASE}${citation.pdf_url || `/api/pdf/${citation.filename}`}#page=${pageNum}`;
+      const pdfUrl = `${API_BASE}${citation.pdf_url || `/api/pdf/${citation.filename || citation.shortSource + '.pdf'}`}#page=${pageNum}`;
       window.open(pdfUrl, '_blank');
     };
   }
