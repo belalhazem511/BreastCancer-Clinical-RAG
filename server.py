@@ -194,11 +194,13 @@ CORE INSTRUCTIONS:
    - Follow-up: Annual mammography for 5 years; do not routinely use MRI or ultrasound for routine post-treatment surveillance unless indicated.
 
 4. True Out-of-Scope Questions (Insufficient Context):
-   - ONLY return Insufficient Context if the query is genuinely OUT-OF-SCOPE:
-     * Non-breast cancers (e.g. lung, prostate, colorectal cancer, leukemia, melanoma).
-     * Unrelated medical domains (e.g. cardiology, dermatology, nephrology).
+   - You MUST return Insufficient Context if the query is OUT-OF-SCOPE:
+     * Non-breast cancers (e.g. lung, prostate, colorectal/colon cancer, glioblastoma, melanoma, leukemia, cervical cancer, pancreatic cancer).
+     * Foreign or non-NICE guidelines (e.g. NCCN guidelines, ASCO, ESMO, FDA approval criteria).
+     * Unrelated medical domains (e.g. cardiology, acute coronary syndrome, diabetes, nephrology).
+     * Pseudoscience / unproven remedies (e.g. baking soda, alkaline water, ozone therapy, high-dose vitamin C cure, ivermectin for cancer).
      * Non-medical queries (e.g. physics, programming, geography, general trivia).
-   - For ANY breast cancer or familial risk clinical question, provide the evidence-grounded answer.
+   - For ANY NICE breast cancer or familial risk clinical question, provide the evidence-grounded answer.
 
 REQUIRED OUTPUT FORMAT:
 
@@ -242,27 +244,39 @@ Confidence and Safety:
 def is_insufficient_context(text: str) -> bool:
     """
     Check whether the LLM determined that the question is genuinely out of scope
-    (e.g., non-breast cancer or non-medical).
+    (e.g., non-breast cancer, foreign guidelines, or non-medical).
     """
     cleaned = text.strip()
     lowered = cleaned.lower()
 
-    # If the response contains a Recommendations section with bullet points, it is NOT insufficient context
-    if re.search(r"(?:#+\s*)?(?:\*\*)?Recommendations:?(?:\*\*)?\s*[\n\r]+\s*[-*•\d]", cleaned, re.IGNORECASE):
-        return False
-
-    # Check for dedicated Insufficient Context heading at start or dominant response
-    return (
+    # Dedicated Insufficient Context heading or explicit out-of-scope declarations
+    if (
         cleaned.startswith("Insufficient Context:")
         or cleaned.startswith("# Insufficient Context")
         or cleaned.startswith("### Insufficient Context")
         or "no applicable nice guideline citation was found" in lowered
         or "no applicable nice guideline citation was generated" in lowered
-        or (
-            "the retrieved nice guideline context does not contain information that supports this question" in lowered
-            and not re.search(r"recommendations:", lowered)
-        )
-    )
+        or "is outside the scope of nice breast cancer guidelines" in lowered
+        or "knowledge base is strictly focused on nice breast cancer guidelines" in lowered
+        or "knowledge base is strictly limited to three official nice guidelines" in lowered
+        or "my instructions state" in lowered
+        or "the retrieved nice guideline context does not contain information that supports this question" in lowered
+        or "does not contain information on nccn" in lowered
+        or "nccn guidelines are not covered" in lowered
+        or "nccn guidelines are outside the scope" in lowered
+        or "asco guidelines are outside the scope" in lowered
+        or "esmo guidelines are outside the scope" in lowered
+    ):
+        return True
+
+    # If the response contains a Recommendations section with bullet points
+    if re.search(r"(?:#+\s*)?(?:\*\*)?Recommendations:?(?:\*\*)?\s*[\n\r]+\s*[-*•\d]", cleaned, re.IGNORECASE):
+        # But if the bullet points literally state insufficient context or out of scope, reject
+        if "insufficient context" in lowered or "outside the scope" in lowered:
+            return True
+        return False
+
+    return False
 
 
 # ============================================================
@@ -638,7 +652,44 @@ async def chat_endpoint(payload: ChatRequest):
         )
 
     source_filter = payload.source_filter
-    top_k = payload.top_k or 4
+    top_k = payload.top_k or 5
+
+    # Step 0: Pre-LLM Hard Out-of-Scope check
+    if Retrieval.is_hard_out_of_scope(question):
+        insufficient_response = """
+### Insufficient Context
+
+The retrieved NICE guideline context does not contain information that supports this question. The knowledge base is strictly focused on NICE breast cancer guidelines (NG101, CG81, CG164).
+
+### Citation
+
+No applicable NICE guideline citation was found for this question.
+
+### Confidence and Safety
+
+- **Confidence: Low**
+- The question is outside the scope of NICE breast cancer guidelines (NG101, CG81, CG164).
+- No answer was generated from outside knowledge.
+""".strip()
+
+        return {
+            "success": True,
+            "has_context": False,
+            "summary": (
+                "The retrieved NICE guideline context does not contain "
+                "information that supports this question. The knowledge base is "
+                "strictly focused on NICE breast cancer guidelines (NG101, CG81, CG164)."
+            ),
+            "recommendations": [],
+            "supporting_evidence": [],
+            "confidence": "Low",
+            "confidence_reason": (
+                "The question is outside the scope of NICE breast cancer guidelines (NG101, CG81, CG164)."
+            ),
+            "source_match": "0%",
+            "citations": [],
+            "raw_response": insufficient_response,
+        }
 
     # Step 1: Hybrid Retrieval with Reciprocal Rank Fusion
     try:
@@ -722,7 +773,9 @@ Follow the required output format exactly.
 
     # Step 5: If LLM generation failed across all models or API key is not configured
     if not raw_llm_response:
-        if results:
+        q_lower = question.lower()
+        has_breast_kw = any(kw in q_lower for kw in Retrieval.BREAST_DOMAIN_KEYWORDS)
+        if results and (has_breast_kw or results[0].get("hybrid_score", 0) >= 0.75):
             top_chunk = results[0]
             recommendations_list = []
             for r in results:
@@ -763,7 +816,7 @@ No applicable NICE guideline citation was generated for this question.
 ### Confidence and Safety
 
 - **Confidence: Low**
-- A grounded NICE guideline answer could not be generated.
+- The question is outside the scope of NICE breast cancer guidelines.
 - No answer was generated from outside knowledge.
 """.strip()
 
@@ -778,13 +831,13 @@ No applicable NICE guideline citation was generated for this question.
                 "supporting_evidence": [],
                 "confidence": "Low",
                 "confidence_reason": (
-                    "The retrieved context does not support "
-                    "an answer to this question."
+                    "The question is outside the scope of NICE breast cancer guidelines."
                 ),
                 "source_match": "0%",
                 "citations": [],
                 "raw_response": failed_response,
             }
+
 
     # Step 6: Parse LLM response
     parsed = parse_llm_response(raw_llm_response, results)

@@ -171,24 +171,64 @@ SYNONYMS = {
     "side effects": "side effects menopausal symptoms hot flushes arthralgia osteoporosis",
 }
 
-# Domain vocabulary to safeguard boundary and clinical questions from pre-LLM rejection
-IN_DOMAIN_KEYWORDS = {
-    "breast", "cancer", "carcinoma", "dcis", "tumour", "tumor", "mastectomy",
-    "chemo", "chemotherapy", "radiotherapy", "radiation", "hormone", "tamoxifen",
-    "aromatase", "anastrozole", "letrozole", "exemestane", "her2", "trastuzumab",
-    "pertuzumab", "brca", "brca1", "brca2", "tp53", "mammography", "mammogram",
-    "staging", "mri", "sentinel", "slnb", "lymph", "node", "axilla", "axillary",
-    "biopsy", "endocrine", "resection", "recurrence", "relapse", "metastases",
-    "metastasis", "metastatic", "prophylactic", "screening", "surveillance",
-    "nice", "guideline", "guidelines", "patient", "patients", "clinical",
-    "treatment", "therapy", "surgery", "surgical", "risk", "gene", "genetic",
-    "family", "familial", "history", "margin", "margins", "premenopausal",
-    "postmenopausal", "scan", "scans", "ultrasound", "pet", "pet-ct", "ct",
-    "bone", "bisphosphonates", "zoledronic", "clodronate", "reconstruction",
-    "fertility", "pregnancy", "men", "male", "contraceptive", "hrt", "raloxifene",
-    "side effects", "lymphoedema", "lymphedema", "hot flush", "arthralgia",
-    "ng101", "cg81", "cg164", "recommendation", "recommend", "contraindication"
+# Domain vocabulary specifically for NICE breast cancer guidelines (NG101, CG81, CG164)
+BREAST_DOMAIN_KEYWORDS = {
+    "breast", "mammary", "mastectomy", "lumpectomy", "mammogram", "mammography",
+    "dcis", "lcis", "ductal", "lobular", "tamoxifen", "anastrozole", "letrozole",
+    "exemestane", "trastuzumab", "herceptin", "pertuzumab", "perjeta", "t-dm1",
+    "kadcyla", "palb2", "brca", "brca1", "brca2", "tp53", "slnb", "sentinel lymph node",
+    "axilla", "axillary", "gynaecomastia", "gynecomastia", "paget", "filgrastim",
+    "zoledronic", "clodronate", "re-excision", "breast-conserving", "bcs",
+    "ng101", "cg81", "cg164", "familial breast", "family history of breast"
 }
+
+# Explicit non-breast cancer & out-of-scope clinical patterns
+OUT_OF_SCOPE_PATTERNS = [
+    # Non-breast cancers & organs
+    r"\b(?:lung cancer|nsclc|sclc|non-small cell|small cell lung)\b",
+    r"\b(?:prostate cancer|prostate carcinoma|psa screening|prostatectomy)\b",
+    r"\b(?:colon cancer|colorectal|bowel cancer|rectal cancer|folfox|folfiri)\b",
+    r"\b(?:pancreatic cancer|pancreas adenocarcinoma|whipple)\b",
+    r"\b(?:glioblastoma|glioma|brain tumor|brain tumour|astrocytoma)\b",
+    r"\b(?:melanoma|skin cancer|basal cell|squamous cell carcinoma)\b",
+    r"\b(?:cervical cancer|cervix carcinoma|pap smear|hpv vaccine)\b",
+    r"\b(?:endometrial cancer|endometrium carcinoma|uterine cancer|uterus cancer)\b",
+    r"\b(?:renal cell|kidney cancer|nephrectomy)\b",
+    r"\b(?:bladder cancer|urothelial)\b",
+    r"\b(?:leukemia|leukaemia|acute myeloid|aml|all|cll|cml)\b",
+    r"\b(?:lymphoma|hodgkin|non-hodgkin|diffuse large b-cell)\b",
+    r"\b(?:multiple myeloma|myeloma)\b",
+    r"\b(?:gastric cancer|stomach cancer|gastrectomy)\b",
+    r"\b(?:esophageal cancer|oesophageal)\b",
+    r"\b(?:liver cancer|hepatocellular|hcc|cholangiocarcinoma)\b",
+    r"\b(?:thyroid cancer|papillary thyroid)\b",
+    r"\b(?:sarcoma|osteosarcoma|chondrosarcoma|ewing)\b",
+    r"\b(?:epithelial ovarian cancer|ovarian cancer treatment|debulking surgery)\b",
+    # Non-oncology diseases
+    r"\b(?:diabetes|diabetic|metformin|insulin glargine|sglt2|hba1c)\b",
+    r"\b(?:acute coronary syndrome|myocardial infarction|heart attack|angina|stent)\b",
+    r"\b(?:hypertension|blood pressure|lisinopril|amlodipine)\b",
+    r"\b(?:stroke|ischemic stroke|tpa|alteplase)\b",
+    r"\b(?:asthma|copd|inhaler|albuterol)\b",
+    r"\b(?:alzheimer|dementia|parkinson)\b",
+    r"\b(?:covid-19|sars-cov-2|coronavirus)\b",
+    # Foreign / non-NICE guidelines
+    r"\b(?:nccn|nccn guidelines|asco|asco guidelines|esmo|esmo guidelines|american cancer society)\b",
+    # Pseudoscience / unproven alternative therapies
+    r"\b(?:baking soda|alkaline diet|alkaline water|ozone therapy|high-dose vitamin c|intravenous vitamin c|vitamin c cure|ivermectin for cancer|apricot seeds|amygdalin|laetrile|coffee enema)\b",
+]
+
+def is_hard_out_of_scope(question: str) -> bool:
+    """Check if the query is explicitly asking about non-breast cancer, foreign guidelines, or non-medical topics."""
+    q_lower = question.lower()
+    for pat in OUT_OF_SCOPE_PATTERNS:
+        if re.search(pat, q_lower):
+            # Special exception: CG164 covers familial risk in families with history of breast and ovarian cancer
+            if "ovarian" in pat and any(k in q_lower for k in ["familial", "family history", "brca", "genetic", "risk"]):
+                if not any(k in q_lower for k in ["treatment", "chemotherapy", "cisplatin", "carboplatin", "debulking", "surgery"]):
+                    continue
+            return True
+    return False
 
 # 7. BM25 tokenizer with synonym expansion
 def tokenize(text, expand_synonyms=False):
@@ -233,6 +273,10 @@ def hybrid_query(
     Perform calibrated hybrid retrieval combining BGE dense semantic search
     and BM25 keyword matching with Reciprocal Rank Fusion (RRF).
     """
+    # 1. HARD OUT-OF-SCOPE GATING
+    if is_hard_out_of_scope(question):
+        return []
+
     # A. SEMANTIC RETRIEVAL - BGE
     query_embedding = encode_query_vector(question)
     semantic_scores = embeddings @ query_embedding
@@ -248,17 +292,15 @@ def hybrid_query(
     best_keyword_score = float(np.max(keyword_scores)) if len(keyword_scores) > 0 else 0.0
 
     # C. PRE-LLM RELEVANCE GATING
-    # Check if query contains any breast cancer clinical domain keywords
     q_lower = question.lower()
-    has_domain_keyword = any(kw in q_lower for kw in IN_DOMAIN_KEYWORDS)
+    has_breast_keyword = any(kw in q_lower for kw in BREAST_DOMAIN_KEYWORDS)
 
-    # Reject completely out-of-domain queries (e.g. physics, cooking, programming, capital cities)
-    # Never reject queries that contain medical/breast oncology terms
-    if not has_domain_keyword:
-        if (best_semantic_score < 0.48 and best_keyword_score < 2.5) or best_semantic_score < 0.40:
+    if not has_breast_keyword:
+        # Non-breast queries must meet strong semantic (>=0.62) and keyword evidence to pass
+        if best_semantic_score < 0.62 and best_keyword_score < 3.5:
             return []
     else:
-        # For domain queries, only reject if similarity is catastrophically low (< 0.25)
+        # Breast queries are preserved for boundary evaluation unless catastrophically low (<0.25)
         if best_semantic_score < 0.25 and best_keyword_score < 0.5:
             return []
 
